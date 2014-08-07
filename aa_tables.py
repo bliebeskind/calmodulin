@@ -33,6 +33,44 @@ def make_biochem(infile,biochem_infile,feature):
 	# skip first column with this: ix[:,1:]
 	return pd.concat([ef_col,biochem_df],axis=1)
 	
+def read_from_fasta(fas_infile):
+	'''Read fasta file and return generator of sequence names and sequences.'''
+	name = None
+	seq = []
+	with open(fas_infile) as f:
+		for line in f:
+			if line.startswith(">"):
+				if name: # is next sequence, so yield values for last seq
+					yield name, ''.join(seq)
+				seq = []
+				name = line[1:].strip() # skip ">"
+			else:
+				seq.append(line.strip())
+		yield name, ''.join(seq)
+	
+def df_from_fasta(fasta_infile):
+	'''
+	Given fasta infile, return pandas DataFrame where rows are sequences.
+	Also includes a column called "Id" which define the protein. These are
+	designated by putting the id before the sequence name, separated by an
+	underscore:
+	EF1_human, EF1_mouse, EF2_human...etc.
+	'''
+	length = None
+	seq_count = 0
+	for seq_name,seq in read_from_fasta(fasta_infile):
+		if length == None: # is first sequence
+			length = len(seq)
+			df_D = {i+1:[] for i in range(length)} 	# initialize AA columns
+			df_D['Id'] = []						# initialize name columns
+		assert len(seq) == length, "Sequences must all be the same length"
+		seq_id = seq_name.split("_")[0]
+		df_D["Id"] += [seq_id]
+		for i,aa in enumerate(seq):
+			df_D[i+1] += [aa]
+	return pd.DataFrame(df_D,columns=['Id']+[i+1 for i in range(length)])
+		
+	
 def biochem_rows(file_list,biochem_infile,feature):
 	full_table = pd.DataFrame()
 	for f in file_list:
